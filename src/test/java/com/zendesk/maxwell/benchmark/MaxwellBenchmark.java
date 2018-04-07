@@ -77,7 +77,7 @@ public class MaxwellBenchmark {
 		config.producerType = "profiler";
 
 		System.out.println("Generating data...");
-		generateData(server.getConnection(), 1000000);
+		generateData(server.getConnection(), 5000000);
 		System.out.println("done generating data, starting maxwell");
 		Maxwell m = new Maxwell(config);
 		m.run();
