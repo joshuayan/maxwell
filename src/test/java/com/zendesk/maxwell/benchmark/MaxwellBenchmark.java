@@ -5,10 +5,13 @@ import com.zendesk.maxwell.MaxwellConfig;
 import com.zendesk.maxwell.MaxwellTestSupport;
 import com.zendesk.maxwell.MysqlIsolatedServer;
 import com.zendesk.maxwell.replication.Position;
+import joptsimple.OptionParser;
+import joptsimple.OptionSet;
 
 import java.sql.*;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class MaxwellBenchmark {
 	/*
@@ -59,12 +62,20 @@ public class MaxwellBenchmark {
 		}
 	}
 
-
-	public static void main(String args[]) throws Exception {
-		MaxwellConfig config = new MaxwellConfig(args);
-		MysqlIsolatedServer server = MaxwellTestSupport.setupServer("");
+	private static void generate(int nRows) throws Exception {
+		MysqlIsolatedServer server = MaxwellTestSupport.setupServer("--no-clean");
 		MaxwellTestSupport.setupSchema(server, false);
+		System.out.println("Generating data...");
+		generateData(server.getConnection(), nRows);
+		System.out.println("generated data.  you may now run:");
+		System.out.println("bin/maxwell-benchmark --input=" +  server.path);
+	}
 
+	private static void benchmark(String path, String args[]) throws Exception {
+		MaxwellConfig config = new MaxwellConfig(args);
+		MysqlIsolatedServer server = MaxwellTestSupport.setupServer("--no-clean --reuse=" + path);
+
+		System.out.println("ok booted: " + server.toString());
 		config.initPosition = Position.capture(server.getConnection(), false);
 
 		config.maxwellMysql.host = "127.0.0.1";
@@ -76,10 +87,37 @@ public class MaxwellBenchmark {
 
 		config.producerType = "profiler";
 
-		System.out.println("Generating data...");
-		generateData(server.getConnection(), 5000000);
-		System.out.println("done generating data, starting maxwell");
 		Maxwell m = new Maxwell(config);
 		m.run();
+	}
+
+	private static OptionParser buildOptionParser() {
+		final OptionParser parser = new OptionParser();
+		parser.accepts("generate", "generate this many rows of benchmark data").withRequiredArg();
+		parser.accepts("input", "run benchmark using this mysql data-path").withRequiredArg();
+		parser.allowsUnrecognizedOptions();
+		return parser;
+	}
+
+
+	public static void main(String args[]) throws Exception {
+
+		OptionParser p = buildOptionParser();
+		OptionSet options = p.parse(args);
+
+		if ( options.has("generate") ) {
+			generate(Integer.parseInt((String) options.valueOf("generate")));
+		} else if ( options.has("input") ) {
+			String maxwellArgs[] = new String[options.nonOptionArguments().size()];
+			int i = 0;
+			for(Object o : options.nonOptionArguments()) {
+				maxwellArgs[i++] = o.toString();
+			}
+
+			benchmark((String) options.valueOf("input"), maxwellArgs);
+		} else {
+			p.printHelpOn(System.out);
+			System.exit(1);
+		}
 	}
 }
